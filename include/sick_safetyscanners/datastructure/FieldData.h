@@ -66,7 +66,7 @@ public:
    * \param is_valid if the field data is valid.
    */
   void setIsValid(bool is_valid);
-  ;
+
   /*!
    * \brief Gets the version indicator for the scanner.
    *
@@ -132,7 +132,6 @@ public:
    * \param is_defined if the field data is defined.
    */
   void setIsDefined(bool is_defined);
-  ;
 
   /*!
    * \brief Returns the configured eval method.
@@ -161,7 +160,6 @@ public:
    * \param multi_sampling The configured multiple sampling.
    */
   void setMultiSampling(const uint16_t& multi_sampling);
-  ;
 
   /*!
    * \brief Returns the configured object resolution.
@@ -176,7 +174,7 @@ public:
    * \param object_resolution The configured object resolution.
    */
   void setObjectResolution(const uint16_t& object_resolution);
-  ;
+  
   /*!
    * \brief Returns the index of the field set the field belongs to.
    *

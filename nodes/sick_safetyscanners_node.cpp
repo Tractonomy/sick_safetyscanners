@@ -5,6 +5,7 @@
 /*!
 *  Copyright (C) 2018, SICK AG, Waldkirch
 *  Copyright (C) 2018, FZI Forschungszentrum Informatik, Karlsruhe, Germany
+*  Copyright (C) 2020, Tractonomy robotics BV, Kortrijk, Belgium
 *
 *
 * Licensed under the Apache License, Version 2.0 (the "License");
@@ -33,7 +34,7 @@
 //----------------------------------------------------------------------
 
 #include "sick_safetyscanners/SickSafetyscannersRos.h"
-#include <ros/ros.h>
+#include <rclcpp/rclcpp.hpp>
 
 /*!
  * @brief main The Main node to start the ROS driver, this method is executed via launch file.
@@ -41,12 +42,14 @@
  * @param argv Arguments which are given on startup of the main function.
  * @return If it runs successful, will always return 0 for the ROS driver.
  */
-int main(int argc, char** argv)
+
+int main(int argc, char *argv[])
 {
-  ros::init(argc, argv, "sick_safetyscanners");
-
-  sick::SickSafetyscannersRos microscan3_ros;
-
-  ros::spin();
+  rclcpp::init(argc, argv);
+  
+  auto microscan3_ros = std::make_shared<sick::SickSafetyscannersRos>();
+  
+  rclcpp::spin(microscan3_ros);
+  rclcpp::shutdown();
   return 0;
 }

@@ -43,12 +43,12 @@ The driver is released at longer intervals as a binary package.
 
 ```bash
 source /opt/ros/<rosdistro>/setup.bash
-mkdir -p ~/catkin_ws/src/
-cd ~/catkin_ws/src/
+mkdir -p ~/ros_ws/src/
+cd ~/ros_ws/src/
 git clone https://github.com/SICKAG/sick_safetyscanners.git
 cd ..
-catkin_make install
-source ~/catkin_ws/install/setup.bash
+colcon build
+source ~/ros_ws/install/setup.bash
 ```
 
 ### Starting
@@ -56,7 +56,7 @@ source ~/catkin_ws/install/setup.bash
 To start the driver the launch file has to be started. For the driver to work correctly, the sensor ip and host ip have to be defined. These parameters can be passed to the sensor as arguments via launch file.
 
 ```
-roslaunch sick_safetyscanners sick_safetyscanners.launch sensor_ip:=192.168.1.10 host_ip:=192.168.1.9
+ros2 launch sick_safetyscanners sick_safetyscanners.launch.py sensor_ip:=192.168.1.10 host_ip:=192.168.1.9
 ```
 
 This will start the driver and the dynamic reconfigure node. In this you can set different parameters on runtime, especially the angles and the data the sensor should publish. If these parameters should be set on startup they can be loaded to the parameter server beforehand.
@@ -64,8 +64,13 @@ This will start the driver and the dynamic reconfigure node. In this you can set
 To visualize the data start rviz and subscribe to the ~/laser_scan topic.
 
 ```
-rosrun rviz rviz 
+ros2 run rviz2 rviz2 
 ```
+
+# Notes
+
+1. Diagnostic checks are not yet implemented.
+2. Asynchronous parameter updating as a replacement for dynamic_reconfigure is not yet implemented in ROS2.
 
 ### Troubleshooting
 
@@ -81,32 +86,32 @@ rosrun rviz rviz
 
 
 `
-~/laser_scan (type: sensor_msgs/LaserScan)
+laser_scan (type: sensor_msgs/LaserScan)
 `
 
 Publishes a scan from the laserscanner
 
 `
-~/extended_laser_scan (type: sick_safetyscanners/ExtendedLaserScanMsg)
+extended_laser_scan (type: sick_safetyscanners/ExtendedLaserScanMsg)
 `
 
 Extends the basic laser scan message by reflector data and intrusion data.
 
 `
-~/output_paths (type: sick_safetyscanners/OutputPathMsg)
+output_paths (type: sick_safetyscanners/OutputPathMsg)
 `
 
 Gives feedback of the current status of the output paths.
 
 
 `
-~/raw_data (type: sick_safetyscanners/RawMicroScanDataMsg)
+raw_data (type: sick_safetyscanners/RawMicroScanDataMsg)
 `
 
 Publishes the raw data from the sensor as a ROS message.
 
 `
-~/diagnostics (type: diagnostic_msgs/DiagnosticArray)
+diagnostics (type: diagnostic_msgs/DiagnosticArray)
 `
 
 Frequency and timestamp diagnostics information.
@@ -156,6 +161,10 @@ on behalf of SICK AG
 
 - <http://www.sick.com>
 
+The ROS2 port has been contributed by
 
+**Tractonomy Robotics**
 
+Tractonomy Robotics BV, Kortrijk, Belgium
 
+- <www.tractonomy.com>

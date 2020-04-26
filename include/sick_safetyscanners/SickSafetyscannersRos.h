@@ -29,6 +29,9 @@
  *
  * \author  Lennart Puck <puck@fzi.de>
  * \date    2018-09-24
+ * 
+ * Conversion to ROS2 by Tractonomy Robotics BV, Kortrijk, Belgium
+ * info@tractonomy.com
  */
 //----------------------------------------------------------------------
 
@@ -37,27 +40,25 @@
 
 
 // ROS
-#include <diagnostic_updater/diagnostic_updater.h>
-#include <diagnostic_updater/publisher.h>
-#include <ros/ros.h>
-#include <sensor_msgs/JointState.h>
-#include <sensor_msgs/LaserScan.h>
+//TODO Setup diagnostics updater
+#include <diagnostic_updater/diagnostic_updater.hpp>
+#include <diagnostic_updater/publisher.hpp>
+#include <rclcpp/rclcpp.hpp>
+#include "sensor_msgs/msg/joint_state.hpp"
+#include "sensor_msgs/msg/laser_scan.hpp"
 
 // STD
 #include <string>
 #include <vector>
 
 // Package
-#include <sick_safetyscanners/ExtendedLaserScanMsg.h>
-#include <sick_safetyscanners/FieldData.h>
-#include <sick_safetyscanners/OutputPathsMsg.h>
-#include <sick_safetyscanners/RawMicroScanDataMsg.h>
-#include <sick_safetyscanners/SickSafetyscanners.h>
-#include <sick_safetyscanners/SickSafetyscannersConfigurationConfig.h>
-#include <sick_safetyscanners/datastructure/CommSettings.h>
-#include <sick_safetyscanners/datastructure/FieldData.h>
-
-#include <dynamic_reconfigure/server.h>
+#include "sick_safetyscanners/msg/extended_laser_scan_msg.hpp"
+#include "sick_safetyscanners/srv/field_data.hpp"
+#include "sick_safetyscanners/msg/output_paths_msg.hpp"
+#include "sick_safetyscanners/msg/raw_micro_scan_data_msg.hpp"
+#include "sick_safetyscanners/SickSafetyscanners.h"
+#include "sick_safetyscanners/datastructure/CommSettings.h"
+#include "sick_safetyscanners/datastructure/FieldData.h"
 
 #include <cmath>
 
@@ -95,14 +96,14 @@ inline uint16_t skipToPublishFrequency(int skip)
   return skip + 1;
 }
 
-typedef diagnostic_updater::DiagnosedPublisher<sensor_msgs::LaserScan> DiagnosedLaserScanPublisher;
+typedef diagnostic_updater::DiagnosedPublisher<sensor_msgs::msg::LaserScan> DiagnosedLaserScanPublisher;
 
 /*!
  * \brief The SickSafetyscannersRos class
  *
  * Main class for the node to handle the ROS interfacing.
  */
-class SickSafetyscannersRos
+class SickSafetyscannersRos : public rclcpp::Node
 {
 public:
   /*!
@@ -121,34 +122,24 @@ public:
   virtual ~SickSafetyscannersRos();
 
 private:
-  //! ROS node handle.
-  ros::NodeHandle m_nh;
-
-  //! ROS private node handle
-  ros::NodeHandle m_private_nh;
-
-  //! ROS topic publisher
-  ros::Publisher m_laser_scan_publisher;
-  ros::Publisher m_extended_laser_scan_publisher;
-  ros::Publisher m_raw_data_publisher;
-  ros::Publisher m_output_path_publisher;
+  rclcpp::Publisher<sensor_msgs::msg::LaserScan>::SharedPtr m_laser_scan_publisher;
+  rclcpp::Publisher<sick_safetyscanners::msg::ExtendedLaserScanMsg>::SharedPtr m_extended_laser_scan_publisher;
+  rclcpp::Publisher<sick_safetyscanners::msg::RawMicroScanDataMsg>::SharedPtr m_raw_data_publisher;
+  rclcpp::Publisher<sick_safetyscanners::msg::OutputPathsMsg>::SharedPtr m_output_path_publisher;
 
   // Diagnostics
   diagnostic_updater::Updater m_diagnostic_updater;
   std::shared_ptr<DiagnosedLaserScanPublisher> m_diagnosed_laser_scan_publisher;
-  sick_safetyscanners::RawMicroScanDataMsg m_last_raw_data;
+  sick_safetyscanners::msg::RawMicroScanDataMsg m_last_raw_data;
   void sensorDiagnostics(diagnostic_updater::DiagnosticStatusWrapper& diagnostic_status);
 
-  ros::ServiceServer m_field_service_server;
+  rclcpp::Service<sick_safetyscanners::srv::FieldData>::SharedPtr m_field_service_server;
 
   bool m_initialised;
 
   std::shared_ptr<sick::SickSafetyscanners> m_device;
 
   sick::datastructure::CommSettings m_communication_settings;
-
-  dynamic_reconfigure::Server<sick_safetyscanners::SickSafetyscannersConfigurationConfig>
-    m_dynamic_reconfiguration_server;
 
   std::string m_frame_id;
   double m_time_offset;
@@ -168,56 +159,48 @@ private:
    * @return True if successful.
    */
   bool readParameters();
-
+ 
   /*!
    * \brief Function which is called when a new complete UDP Packet is received
    * \param data, the assortment of all data from the sensor
    */
   void receivedUDPPacket(const datastructure::Data& data);
 
-  /*!
-   * \brief Function which is triggered when a dynamic reconfiguration is performed
-   * \param config The new configuration to set
-   * \param level Level of the new configuration
-   */
-  void reconfigureCallback(const sick_safetyscanners::SickSafetyscannersConfigurationConfig& config,
-                           const uint32_t& level);
-
   bool isInitialised();
 
-  sensor_msgs::LaserScan createLaserScanMessage(const sick::datastructure::Data& data);
-  sick_safetyscanners::ExtendedLaserScanMsg
+  sensor_msgs::msg::LaserScan createLaserScanMessage(const sick::datastructure::Data& data);
+  sick_safetyscanners::msg::ExtendedLaserScanMsg
   createExtendedLaserScanMessage(const sick::datastructure::Data& data);
   std::vector<bool>
   getMedianReflectors(const std::vector<sick::datastructure::ScanPoint> scan_points);
-  sick_safetyscanners::OutputPathsMsg
+  sick_safetyscanners::msg::OutputPathsMsg
   createOutputPathsMessage(const sick::datastructure::Data& data);
-  sick_safetyscanners::RawMicroScanDataMsg
+  sick_safetyscanners::msg::RawMicroScanDataMsg
   createRawDataMessage(const sick::datastructure::Data& data);
-  sick_safetyscanners::DataHeaderMsg createDataHeaderMessage(const sick::datastructure::Data& data);
-  sick_safetyscanners::DerivedValuesMsg
+  sick_safetyscanners::msg::DataHeaderMsg createDataHeaderMessage(const sick::datastructure::Data& data);
+  sick_safetyscanners::msg::DerivedValuesMsg
   createDerivedValuesMessage(const sick::datastructure::Data& data);
-  sick_safetyscanners::GeneralSystemStateMsg
+  sick_safetyscanners::msg::GeneralSystemStateMsg
   createGeneralSystemStateMessage(const sick::datastructure::Data& data);
-  sick_safetyscanners::MeasurementDataMsg
+  sick_safetyscanners::msg::MeasurementDataMsg
   createMeasurementDataMessage(const sick::datastructure::Data& data);
-  std::vector<sick_safetyscanners::ScanPointMsg>
+  std::vector<sick_safetyscanners::msg::ScanPointMsg>
   createScanPointMessageVector(const sick::datastructure::Data& data);
-  sick_safetyscanners::IntrusionDataMsg
+  sick_safetyscanners::msg::IntrusionDataMsg
   createIntrusionDataMessage(const sick::datastructure::Data& data);
-  std::vector<sick_safetyscanners::IntrusionDatumMsg>
+  std::vector<sick_safetyscanners::msg::IntrusionDatumMsg>
   createIntrusionDatumMessageVector(const sick::datastructure::Data& data);
-  sick_safetyscanners::ApplicationDataMsg
+  sick_safetyscanners::msg::ApplicationDataMsg
   createApplicationDataMessage(const sick::datastructure::Data& data);
-  sick_safetyscanners::ApplicationInputsMsg
+  sick_safetyscanners::msg::ApplicationInputsMsg
   createApplicationInputsMessage(const sick::datastructure::Data& data);
-  sick_safetyscanners::ApplicationOutputsMsg
+  sick_safetyscanners::msg::ApplicationOutputsMsg
   createApplicationOutputsMessage(const sick::datastructure::Data& data);
   void readTypeCodeSettings();
   void readPersistentConfig();
 
-  bool getFieldData(sick_safetyscanners::FieldData::Request& req,
-                    sick_safetyscanners::FieldData::Response& res);
+  void getFieldData(const std::shared_ptr<sick_safetyscanners::srv::FieldData::Request> req,
+                    std::shared_ptr<sick_safetyscanners::srv::FieldData::Response> res);
 };
 
 } // namespace sick

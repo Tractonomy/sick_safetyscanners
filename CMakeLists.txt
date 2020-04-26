@@ -1,86 +1,73 @@
-cmake_minimum_required(VERSION 2.8.3)
+cmake_minimum_required(VERSION 3.5)
 project(sick_safetyscanners)
 
-## Use C++11
-#add_definitions(-std=c++11)
+## Use C++14
+if(NOT CMAKE_CXX_STANDARD)
+  set(CMAKE_CXX_STANDARD 14)
+endif()
 ## By adding -Wall and -Werror, the compiler does not ignore warnings anymore,
 ## enforcing cleaner code.
-add_definitions(-std=c++11 -Wall)
-#add_definitions(-std=c++11 -Wall -Werror)
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall")
+#set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall -Werror")
+if(CMAKE_COMPILER_IS_GNUCXX OR CMAKE_CXX_COMPILER_ID MATCHES "Clang")
+  # we dont use add_compile_options with pedantic in message packages
+  # because the Python C extensions dont comply with it
+  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wextra -Wpedantic")
+endif()
 
-## Find catkin macros and libraries
-find_package(catkin REQUIRED
-  COMPONENTS
-    diagnostic_updater
-    dynamic_reconfigure
-    message_generation
-    roscpp
-    sensor_msgs
-    std_msgs
-)
+## Find ament macros and libraries
+find_package(ament_cmake REQUIRED)
+find_package(ament_index_cpp REQUIRED)
+find_package(rosidl_default_generators REQUIRED)
+find_package(rmw_implementation_cmake REQUIRED)
+find_package(rclcpp REQUIRED)
+find_package(std_msgs REQUIRED)
+find_package(action_msgs REQUIRED)
+find_package(sensor_msgs REQUIRED)
+find_package(common_interfaces REQUIRED)
+find_package(diagnostic_updater REQUIRED)
+find_package(diagnostic_msgs REQUIRED)
 
 ## Find system libraries
 #find_package(Eigen3 REQUIRED)
-find_package(Boost REQUIRED COMPONENTS system thread)
+#SET(Boost_USE_STATIC_LIBS ON)           # link statically
+ADD_DEFINITIONS(-DBOOST_LOG_DYN_LINK)  # or, link dynamically
+find_package(Boost REQUIRED COMPONENTS system thread log log_setup)
 
-generate_dynamic_reconfigure_options(
-  config/SickSafetyscannersConfiguration.cfg
+set(
+  msg_files
+  "msg/ApplicationDataMsg.msg"
+  "msg/ApplicationInputsMsg.msg"
+  "msg/ApplicationOutputsMsg.msg"
+  "msg/DataHeaderMsg.msg"
+  "msg/DerivedValuesMsg.msg"
+  "msg/ExtendedLaserScanMsg.msg"
+  "msg/FieldMsg.msg"
+  "msg/GeneralSystemStateMsg.msg"
+  "msg/IntrusionDataMsg.msg"
+  "msg/IntrusionDatumMsg.msg"
+  "msg/MeasurementDataMsg.msg"
+  "msg/MonitoringCaseMsg.msg"
+  "msg/OutputPathsMsg.msg"
+  "msg/RawMicroScanDataMsg.msg"
+  "msg/ScanPointMsg.msg"
+
 )
 
-
-add_message_files(
-  FILES
-  ApplicationDataMsg.msg
-  ApplicationInputsMsg.msg
-  ApplicationOutputsMsg.msg
-  DataHeaderMsg.msg
-  DerivedValuesMsg.msg
-  ExtendedLaserScanMsg.msg
-  FieldMsg.msg
-  GeneralSystemStateMsg.msg
-  IntrusionDataMsg.msg
-  IntrusionDatumMsg.msg
-  MeasurementDataMsg.msg
-  MonitoringCaseMsg.msg
-  OutputPathsMsg.msg
-  RawMicroScanDataMsg.msg
-  ScanPointMsg.msg
+set(
+  srv_files
+  "srv/FieldData.srv"
 )
 
-add_service_files(
-  FILES
-  FieldData.srv
+set(action_files
 )
 
-generate_messages(
-  DEPENDENCIES
-  sensor_msgs
-  std_msgs
-)
-
-###################################
-## catkin specific configuration ##
-###################################
-## The catkin_package macro generates cmake config files for your package
-## Declare things to be passed to dependent projects
-## INCLUDE_DIRS: uncomment this if your package contains header files
-## LIBRARIES: libraries you create in this project that dependent projects also need
-## CATKIN_DEPENDS: catkin_packages dependent projects also need
-## DEPENDS: system dependencies of this project that dependent projects also need
-catkin_package(
-  INCLUDE_DIRS
-    include
-#    ${EIGEN3_INCLUDE_DIR}
-  LIBRARIES
-    ${PROJECT_NAME}_core
-  CATKIN_DEPENDS
-    dynamic_reconfigure
-    message_runtime
-    roscpp
-    sensor_msgs
-    std_msgs
-  DEPENDS
-    Boost
+rosidl_generate_interfaces(${PROJECT_NAME}
+  ${msg_files}
+  ${srv_files}
+  ${action_files}
+  DEPENDENCIES action_msgs std_msgs sensor_msgs
+  ADD_LINTER_TESTS
 )
 
 
@@ -94,7 +81,6 @@ catkin_package(
 ## Your package locations should be listed before other locations
 include_directories(
   include
-  ${catkin_INCLUDE_DIRS}
 #  ${EIGEN3_INCLUDE_DIR}
   ${Boost_INCLUDE_DIRS}
 )
@@ -200,72 +186,71 @@ add_executable(${PROJECT_NAME}_node
   src/SickSafetyscannersRos.cpp
 )
 
-## Add dependencies to exported targets, like ROS msgs or srvs
-add_dependencies(${PROJECT_NAME}_core
-  ${${PROJECT_NAME}_EXPORTED_TARGETS}
-  ${catkin_EXPORTED_TARGETS}
-)
-
-add_dependencies(${PROJECT_NAME}_node
-  ${${PROJECT_NAME}_EXPORTED_TARGETS}
-  ${catkin_EXPORTED_TARGETS}
-)
-
 ## Specify libraries to link executable targets against
 target_link_libraries(${PROJECT_NAME}_core
-  ${catkin_LIBRARIES}
+  ${Boost_LIBRARIES}
 )
 
 target_link_libraries(${PROJECT_NAME}_node
   ${PROJECT_NAME}_core
-  ${catkin_LIBRARIES}
 )
+
+ament_target_dependencies(${PROJECT_NAME}_node
+  rclcpp
+  ament_cmake
+  ament_index_cpp
+  geometry_msgs
+  std_msgs
+  sensor_msgs
+  diagnostic_updater
+  diagnostic_msgs
+)
+rosidl_target_interfaces(${PROJECT_NAME}_node ${PROJECT_NAME} "rosidl_typesupport_cpp")
 
 #############
 ## Install ##
 #############
 
 # Mark executables and/or libraries for installation
-
-install(
-  TARGETS ${PROJECT_NAME}_core
-  ARCHIVE DESTINATION ${CATKIN_PACKAGE_LIB_DESTINATION}
-  LIBRARY DESTINATION ${CATKIN_PACKAGE_LIB_DESTINATION}
-  RUNTIME DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}
+install(TARGETS
+  ${PROJECT_NAME}_core
+  DESTINATION lib/${PROJECT_NAME}
 )
 
-install(
-  TARGETS ${PROJECT_NAME}_node
-  ARCHIVE DESTINATION ${CATKIN_PACKAGE_LIB_DESTINATION}
-  LIBRARY DESTINATION ${CATKIN_PACKAGE_LIB_DESTINATION}
-  RUNTIME DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}
+install(TARGETS
+  ${PROJECT_NAME}_node
+  DESTINATION lib/${PROJECT_NAME}
 )
 
 # Mark cpp header files for installation
-install(
-  DIRECTORY include/${PROJECT_NAME}/
-  DESTINATION ${CATKIN_PACKAGE_INCLUDE_DESTINATION}
-  FILES_MATCHING PATTERN "*.h"
+target_include_directories(${PROJECT_NAME}_core
+  PUBLIC
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+    $<INSTALL_INTERFACE:include>
 )
 
 # Mark other files for installation
 install(
   DIRECTORY docs launch
-  DESTINATION ${CATKIN_PACKAGE_SHARE_DESTINATION}
+  DESTINATION share/${PROJECT_NAME}
 )
 
 #############
 ## Testing ##
 #############
-
-#if(CATKIN_ENABLE_TESTING)
+#if(BUILD_TESTING)
+#  find_package(ament_lint_auto REQUIRED)
 #set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -pthread")
 ## Add gtest based cpp test target and link libraries
 #catkin_add_gtest(${PROJECT_NAME}-test
 #  test/test_ros_package_template.cpp
 #  test/AlgorithmTest.cpp)
+#  ament_lint_auto_find_test_dependencies()
 #endif()
 
 #if(TARGET ${PROJECT_NAME}-test)
 #  target_link_libraries(${PROJECT_NAME}-test ${PROJECT_NAME}_core)
 #  endif()
+
+ament_export_dependencies(rosidl_default_runtime)
+ament_package()

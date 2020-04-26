@@ -47,6 +47,7 @@
 #include <sick_safetyscanners/data_processing/TCPPacketMerger.h>
 
 #include <boost/bind.hpp>
+#include <boost/log/trivial.hpp>
 #include <limits>
 #include <map>
 

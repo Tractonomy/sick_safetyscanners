@@ -35,8 +35,6 @@
 #ifndef SICK_SAFETYSCANNERS_COMMUNICATION_ASYNCUDPCLIENT_H
 #define SICK_SAFETYSCANNERS_COMMUNICATION_ASYNCUDPCLIENT_H
 
-#include <ros/ros.h>
-
 #include <functional>
 #include <iostream>
 
@@ -44,6 +42,7 @@
 #include <boost/asio.hpp>
 #include <boost/cstdint.hpp>
 #include <boost/function.hpp>
+#include <boost/log/trivial.hpp>
 
 #include <sick_safetyscanners/datastructure/PacketBuffer.h>
 

@@ -66,12 +66,12 @@ bool MethodCommand::processReply()
   if ((getCommandType() == 'A' && getCommandMode() == 'I') ||
       (getCommandType() == 0x41 && getCommandMode() == 0x49))
   {
-    ROS_INFO("Command Method Acknowledged.");
+    BOOST_LOG_TRIVIAL(info) << "Command Method Acknowledged.";
     result = true;
   }
   else
   {
-    ROS_WARN("Command Method Not Accepted.");
+    BOOST_LOG_TRIVIAL(warning) << "Command Method Not Accepted.";
   }
   return result;
 }

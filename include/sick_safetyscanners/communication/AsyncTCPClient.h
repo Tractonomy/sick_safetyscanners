@@ -35,8 +35,6 @@
 #ifndef SICK_SAFETYSCANNERS_COMMUNICATION_ASYNCTCPCLIENT_H
 #define SICK_SAFETYSCANNERS_COMMUNICATION_ASYNCTCPCLIENT_H
 
-#include <ros/ros.h>
-
 #include <functional>
 #include <iostream>
 #include <thread>
@@ -47,6 +45,7 @@
 #include <boost/function.hpp>
 #include <boost/thread/condition.hpp>
 #include <boost/thread/mutex.hpp>
+#include <boost/log/trivial.hpp>
 
 #include <sick_safetyscanners/datastructure/PacketBuffer.h>
 

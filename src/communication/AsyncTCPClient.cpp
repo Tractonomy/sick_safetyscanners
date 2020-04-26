@@ -52,10 +52,10 @@ AsyncTCPClient::AsyncTCPClient(const PacketHandler& packet_handler,
   }
   catch (const std::exception& e)
   {
-    ROS_ERROR("Exception while creating socket: %s", e.what());
+    BOOST_LOG_TRIVIAL(error) << "Exception while creating socket: " << e.what();
   }
   m_remote_endpoint = boost::asio::ip::tcp::endpoint(server_ip, server_port);
-  ROS_INFO("TCP client is setup");
+  BOOST_LOG_TRIVIAL(info) << "TCP client is setup";
 }
 
 AsyncTCPClient::~AsyncTCPClient() {}
@@ -67,21 +67,21 @@ void AsyncTCPClient::doDisconnect()
   m_socket_ptr->shutdown(boost::asio::ip::tcp::socket::shutdown_both, ec);
   if (ec != boost::system::errc::success)
   {
-    ROS_ERROR("Error shutting socket down: %i", ec.value());
+    BOOST_LOG_TRIVIAL(error) <<"Error shutting socket down: " << ec.value();
   }
   else
   {
-    ROS_INFO("TCP Connection successfully shutdown");
+    BOOST_LOG_TRIVIAL(info) <<"TCP Connection successfully shutdown";
   }
 
   m_socket_ptr->close(ec);
   if (ec != boost::system::errc::success)
   {
-    ROS_ERROR("Error closing Socket: %i", ec.value());
+    BOOST_LOG_TRIVIAL(error) << "Error closing Socket: ", ec.value();
   }
   else
   {
-    ROS_INFO("TCP Socket successfully closed.");
+    BOOST_LOG_TRIVIAL(info) << "TCP Socket successfully closed.";
   }
 }
 
@@ -92,11 +92,11 @@ void AsyncTCPClient::doConnect()
   m_socket_ptr->async_connect(m_remote_endpoint, [this](boost::system::error_code ec) {
     if (ec != boost::system::errc::success)
     {
-      ROS_ERROR("TCP error code: %i", ec.value());
+      BOOST_LOG_TRIVIAL(error) << "TCP error code: " << ec.value();
     }
     else
     {
-      ROS_INFO("TCP connection successfully established.");
+      BOOST_LOG_TRIVIAL(info) <<  "TCP connection successfully established.";
     }
     m_connect_condition.notify_all();
   });
@@ -147,7 +147,7 @@ void AsyncTCPClient::handleSendAndReceive(const boost::system::error_code& error
   }
   else
   {
-    ROS_ERROR("Error in tcp handle send and receive: %i", error.value());
+    BOOST_LOG_TRIVIAL(error) << "Error in tcp handle send and receive: " << error.value();
   }
 }
 
@@ -164,7 +164,7 @@ void AsyncTCPClient::handleReceive(const boost::system::error_code& error,
   }
   else
   {
-    ROS_ERROR("Error in tcp handle receive: %i", error.value());
+    BOOST_LOG_TRIVIAL(error) << "Error in tcp handle receive:" << error.value();
   }
 }
 

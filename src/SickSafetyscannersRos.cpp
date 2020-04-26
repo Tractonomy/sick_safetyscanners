@@ -29,6 +29,9 @@
  *
  * \author  Lennart Puck <puck@fzi.de>
  * \date    2018-09-24
+ * 
+ * Conversion to ROS2 by Tractonomy Robotics BV, Kortrijk, Belgium
+ * info@tractonomy.com
  */
 //----------------------------------------------------------------------
 
@@ -39,7 +42,8 @@
 namespace sick {
 
 SickSafetyscannersRos::SickSafetyscannersRos()
-  : m_private_nh("~")
+  : Node("sick_safetyscanners")
+  , m_diagnostic_updater(this)
   , m_initialised(false)
   , m_time_offset(0.0)
   , m_range_min(0.0)
@@ -47,25 +51,21 @@ SickSafetyscannersRos::SickSafetyscannersRos()
   , m_angle_offset(-90.0)
   , m_use_pers_conf(false)
 {
-  dynamic_reconfigure::Server<
-    sick_safetyscanners::SickSafetyscannersConfigurationConfig>::CallbackType reconf_callback =
-    boost::bind(&SickSafetyscannersRos::reconfigureCallback, this, _1, _2);
-  m_dynamic_reconfiguration_server.setCallback(reconf_callback);
   if (!readParameters())
   {
-    ROS_ERROR("Could not read parameters.");
-    ros::requestShutdown();
+    RCLCPP_ERROR(get_logger(), "Could not read parameters.");
+    exit(-1);
   }
   // tcp port can not be changed in the sensor configuration, therefore it is hardcoded
   m_communication_settings.setSensorTcpPort(2122);
-  m_laser_scan_publisher = m_nh.advertise<sensor_msgs::LaserScan>("scan", 100);
-  m_extended_laser_scan_publisher =
-    m_nh.advertise<sick_safetyscanners::ExtendedLaserScanMsg>("extended_laser_scan", 100);
-  m_raw_data_publisher = m_nh.advertise<sick_safetyscanners::RawMicroScanDataMsg>("raw_data", 100);
-  m_output_path_publisher =
-    m_nh.advertise<sick_safetyscanners::OutputPathsMsg>("output_paths", 100);
-  m_field_service_server =
-    m_nh.advertiseService("field_data", &SickSafetyscannersRos::getFieldData, this);
+  rclcpp::QoS qos(100);
+  m_laser_scan_publisher = this->create_publisher<sensor_msgs::msg::LaserScan>("scan", qos);
+  m_extended_laser_scan_publisher =  this->create_publisher<sick_safetyscanners::msg::ExtendedLaserScanMsg>("extended_laser_scan", qos);
+  m_raw_data_publisher = this->create_publisher<sick_safetyscanners::msg::RawMicroScanDataMsg>("raw_data", qos);
+  m_output_path_publisher = this->create_publisher<sick_safetyscanners::msg::OutputPathsMsg>("output_paths", qos);
+  m_field_service_server = this->create_service<sick_safetyscanners::srv::FieldData>(
+    "field_data", 
+    std::bind(&SickSafetyscannersRos::getFieldData, this, std::placeholders::_1, std::placeholders::_2));
 
   // Diagnostics for frequency
   m_diagnostic_updater.setHardwareID(m_communication_settings.getSensorIp().to_string());
@@ -90,12 +90,12 @@ SickSafetyscannersRos::SickSafetyscannersRos()
 
   m_device->changeSensorSettings(m_communication_settings);
   m_initialised = true;
-  ROS_INFO("Successfully launched node.");
+  RCLCPP_INFO(get_logger(), "Successfully launched node.");
 }
 
 void SickSafetyscannersRos::readTypeCodeSettings()
 {
-  ROS_INFO("Reading Type code settings");
+  RCLCPP_INFO(get_logger(),"Reading Type code settings");
   sick::datastructure::TypeCode type_code;
   m_device->requestTypeCode(m_communication_settings, type_code);
   m_communication_settings.setEInterfaceType(type_code.getInterfaceType());
@@ -105,43 +105,11 @@ void SickSafetyscannersRos::readTypeCodeSettings()
 
 void SickSafetyscannersRos::readPersistentConfig()
 {
-  ROS_INFO("Reading Persistent Configuration");
+  RCLCPP_INFO(get_logger(),"Reading Persistent Configuration");
   sick::datastructure::ConfigData config_data;
   m_device->requestPersistentConfig(m_communication_settings, config_data);
   m_communication_settings.setStartAngle(config_data.getStartAngle());
   m_communication_settings.setEndAngle(config_data.getEndAngle());
-}
-
-void SickSafetyscannersRos::reconfigureCallback(
-  const sick_safetyscanners::SickSafetyscannersConfigurationConfig& config, const uint32_t& level)
-{
-  if (isInitialised())
-  {
-    m_communication_settings.setEnabled(config.channel_enabled);
-    m_communication_settings.setPublishingFrequency(skipToPublishFrequency(config.skip));
-    if (config.angle_start == config.angle_end)
-    {
-      m_communication_settings.setStartAngle(sick::radToDeg(0));
-      m_communication_settings.setEndAngle(sick::radToDeg(0));
-    }
-    else
-    {
-      m_communication_settings.setStartAngle(sick::radToDeg(config.angle_start) - m_angle_offset);
-      m_communication_settings.setEndAngle(sick::radToDeg(config.angle_end) - m_angle_offset);
-    }
-    m_communication_settings.setFeatures(config.general_system_state,
-                                         config.derived_settings,
-                                         config.measurement_data,
-                                         config.intrusion_data,
-                                         config.application_io_data);
-    m_device->changeSensorSettings(m_communication_settings);
-
-    m_frame_id = config.frame_id;
-
-    m_time_offset = config.time_offset;
-
-    m_expected_frequency = config.expected_frequency;
-  }
 }
 
 bool SickSafetyscannersRos::isInitialised()
@@ -154,55 +122,60 @@ SickSafetyscannersRos::~SickSafetyscannersRos() {}
 
 bool SickSafetyscannersRos::readParameters()
 {
+  RCLCPP_WARN(get_logger(), "If not specified the default values for the parameters "
+           "will be loaded.");
+
   std::string sensor_ip_adress = "192.168.1.10";
-  if (!m_private_nh.getParam("sensor_ip", sensor_ip_adress))
-  {
-    //    sensor_ip_adress = sick_safetyscanners::SickSafetyscannersConfiguration_sensor_ip;
-    ROS_WARN("Using default sensor IP: %s", sensor_ip_adress.c_str());
-  }
+  declare_parameter("sensor_ip", sensor_ip_adress);
+  get_parameter("sensor_ip", sensor_ip_adress);
+  RCLCPP_WARN(get_logger(), "Using sensor IP: %s", sensor_ip_adress.c_str());
   m_communication_settings.setSensorIp(sensor_ip_adress);
 
 
   std::string host_ip_adress = "192.168.1.9";
-  if (!m_private_nh.getParam("host_ip", host_ip_adress))
-  {
-    ROS_WARN("Using default host IP: %s", host_ip_adress.c_str());
-  }
+  declare_parameter("host_ip", host_ip_adress);
+  get_parameter("host_ip", host_ip_adress);
+  RCLCPP_WARN(get_logger(), "Using host IP: %s", host_ip_adress.c_str());
   m_communication_settings.setHostIp(host_ip_adress);
 
   int host_udp_port = 0;
-  if (!m_private_nh.getParam("host_udp_port", host_udp_port))
-  {
-    ROS_WARN("Using default host UDP Port: %i", host_udp_port);
-  }
+  declare_parameter("host_udp_port", host_udp_port);
+  get_parameter("host_udp_port", host_udp_port);
+  RCLCPP_WARN(get_logger(), "Using host UDP Port: %i", host_udp_port);
   m_communication_settings.setHostUdpPort(host_udp_port);
-
-  ROS_WARN("If not further specified the default values for the dynamic reconfigurable parameters "
-           "will be loaded.");
 
 
   int channel = 0;
-  m_private_nh.getParam("channel", channel);
+  declare_parameter("channel", channel);
+  get_parameter("channel", channel);
   m_communication_settings.setChannel(channel);
 
   bool enabled;
-  m_private_nh.getParam("channel_enabled", enabled);
+  declare_parameter("channel_enabled", enabled);
+  get_parameter("channel_enabled", enabled);
   m_communication_settings.setEnabled(enabled);
 
   int skip;
-  m_private_nh.getParam("skip", skip);
+  declare_parameter("skip", skip);
+  get_parameter("skip", skip);
   m_communication_settings.setPublishingFrequency(skipToPublishFrequency(skip));
 
   float angle_start;
-  m_private_nh.getParam("angle_start", angle_start);
+  declare_parameter("angle_start", angle_start);
+  get_parameter("angle_start", angle_start);
 
   float angle_end;
-  m_private_nh.getParam("angle_end", angle_end);
+  declare_parameter("angle_end", angle_end);
+  get_parameter("angle_end", angle_end);
 
-  m_private_nh.getParam("frequency_tolerance", m_frequency_tolerance);
-  m_private_nh.getParam("expected_frequency", m_expected_frequency);
-  m_private_nh.getParam("timestamp_min_acceptable", m_timestamp_min_acceptable);
-  m_private_nh.getParam("timestamp_max_acceptable", m_timestamp_max_acceptable);
+  declare_parameter("frequency_tolerance", m_frequency_tolerance);
+  get_parameter("frequency_tolerance", m_frequency_tolerance);
+  declare_parameter("expected_frequency", m_expected_frequency);
+  get_parameter("expected_frequency", m_expected_frequency);
+  declare_parameter("timestamp_min_acceptable", m_timestamp_min_acceptable);
+  get_parameter("timestamp_min_acceptable", m_timestamp_min_acceptable);
+  declare_parameter("timestamp_max_acceptable", m_timestamp_max_acceptable);
+  get_parameter("timestamp_max_acceptable", m_timestamp_max_acceptable);
 
   // Included check before calculations to prevent rounding errors while calculating
   if (angle_start == angle_end)
@@ -216,29 +189,34 @@ bool SickSafetyscannersRos::readParameters()
     m_communication_settings.setEndAngle(sick::radToDeg(angle_end) - m_angle_offset);
   }
 
-  m_private_nh.getParam("time_offset", m_time_offset);
-
   bool general_system_state;
-  m_private_nh.getParam("general_system_state", general_system_state);
+  declare_parameter("general_system_state", general_system_state);
+  get_parameter("general_system_state", general_system_state);
 
   bool derived_settings;
-  m_private_nh.getParam("derived_settings", derived_settings);
+  declare_parameter("derived_settings", derived_settings);
+  get_parameter("derived_settings", derived_settings);
 
   bool measurement_data;
-  m_private_nh.getParam("measurement_data", measurement_data);
+  declare_parameter("measurement_data", measurement_data);
+  get_parameter("measurement_data", measurement_data);
 
   bool intrusion_data;
-  m_private_nh.getParam("intrusion_data", intrusion_data);
+  declare_parameter("intrusion_data", intrusion_data);
+  get_parameter("intrusion_data", intrusion_data);
 
   bool application_io_data;
-  m_private_nh.getParam("application_io_data", application_io_data);
+  declare_parameter("application_io_data", application_io_data);
+  get_parameter("application_io_data", application_io_data);
 
   m_communication_settings.setFeatures(
     general_system_state, derived_settings, measurement_data, intrusion_data, application_io_data);
 
-  m_private_nh.getParam("frame_id", m_frame_id);
+  declare_parameter("m_frame_id", m_frame_id);
+  get_parameter("frame_id", m_frame_id);
 
-  m_private_nh.getParam("use_persistent_config", m_use_pers_conf);
+  declare_parameter("m_use_pers_conf", m_use_pers_conf);
+  get_parameter("use_persistent_config", m_use_pers_conf);
 
   return true;
 }
@@ -247,26 +225,23 @@ void SickSafetyscannersRos::receivedUDPPacket(const sick::datastructure::Data& d
 {
   if (!data.getMeasurementDataPtr()->isEmpty() && !data.getDerivedValuesPtr()->isEmpty())
   {
-    sensor_msgs::LaserScan scan = createLaserScanMessage(data);
+    sensor_msgs::msg::LaserScan scan = createLaserScanMessage(data);
 
     m_diagnosed_laser_scan_publisher->publish(scan);
   }
 
-
   if (!data.getMeasurementDataPtr()->isEmpty() && !data.getDerivedValuesPtr()->isEmpty())
   {
-    sick_safetyscanners::ExtendedLaserScanMsg extended_scan = createExtendedLaserScanMessage(data);
+    sick_safetyscanners::msg::ExtendedLaserScanMsg extended_scan = createExtendedLaserScanMessage(data);
 
-    m_extended_laser_scan_publisher.publish(extended_scan);
+    m_extended_laser_scan_publisher->publish(extended_scan);
 
-    sick_safetyscanners::OutputPathsMsg output_paths = createOutputPathsMessage(data);
-    m_output_path_publisher.publish(output_paths);
+    sick_safetyscanners::msg::OutputPathsMsg output_paths = createOutputPathsMessage(data);
+    m_output_path_publisher->publish(output_paths);
   }
 
   m_last_raw_data = createRawDataMessage(data);
-  m_raw_data_publisher.publish(m_last_raw_data);
-
-  m_diagnostic_updater.update();
+  m_raw_data_publisher->publish(m_last_raw_data);
 }
 
 std::string boolToString(bool b)
@@ -277,10 +252,10 @@ std::string boolToString(bool b)
 void SickSafetyscannersRos::sensorDiagnostics(
   diagnostic_updater::DiagnosticStatusWrapper& diagnostic_status)
 {
-  const sick_safetyscanners::DataHeaderMsg& header = m_last_raw_data.header;
+  const sick_safetyscanners::msg::DataHeaderMsg& header = m_last_raw_data.header;
   if (header.timestamp_time == 0 && header.timestamp_date == 0)
   {
-    diagnostic_status.summary(diagnostic_msgs::DiagnosticStatus::STALE,
+    diagnostic_status.summary(diagnostic_msgs::msg::DiagnosticStatus::STALE,
                               "Could not get sensor state");
     return;
   }
@@ -298,7 +273,7 @@ void SickSafetyscannersRos::sensorDiagnostics(
   diagnostic_status.addf("Timestamp date", "%u", header.timestamp_date);
   diagnostic_status.addf("Timestamp time", "%u", header.timestamp_time);
 
-  const sick_safetyscanners::GeneralSystemStateMsg& state = m_last_raw_data.general_system_state;
+  const sick_safetyscanners::msg::GeneralSystemStateMsg& state = m_last_raw_data.general_system_state;
   diagnostic_status.add("Run mode active", boolToString(state.run_mode_active));
   diagnostic_status.add("Standby mode active", boolToString(state.standby_mode_active));
   diagnostic_status.add("Contamination warning", boolToString(state.contamination_warning));
@@ -318,19 +293,19 @@ void SickSafetyscannersRos::sensorDiagnostics(
 
   if (state.device_error)
   {
-    diagnostic_status.summary(diagnostic_msgs::DiagnosticStatus::ERROR, "Device error");
+    diagnostic_status.summary(diagnostic_msgs::msg::DiagnosticStatus::ERROR, "Device error");
   }
   else
   {
-    diagnostic_status.summary(diagnostic_msgs::DiagnosticStatus::OK, "OK");
+    diagnostic_status.summary(diagnostic_msgs::msg::DiagnosticStatus::OK, "OK");
   }
 }
 
-sick_safetyscanners::ExtendedLaserScanMsg
+sick_safetyscanners::msg::ExtendedLaserScanMsg
 SickSafetyscannersRos::createExtendedLaserScanMessage(const sick::datastructure::Data& data)
 {
-  sensor_msgs::LaserScan scan = createLaserScanMessage(data);
-  sick_safetyscanners::ExtendedLaserScanMsg msg;
+  sensor_msgs::msg::LaserScan scan = createLaserScanMessage(data);
+  sick_safetyscanners::msg::ExtendedLaserScanMsg msg;
   msg.laser_scan = scan;
 
   std::vector<sick::datastructure::ScanPoint> scan_points =
@@ -377,14 +352,13 @@ std::vector<bool> SickSafetyscannersRos::getMedianReflectors(
   return res;
 }
 
-sensor_msgs::LaserScan
+sensor_msgs::msg::LaserScan
 SickSafetyscannersRos::createLaserScanMessage(const sick::datastructure::Data& data)
 {
-  sensor_msgs::LaserScan scan;
+  sensor_msgs::msg::LaserScan scan;
   scan.header.frame_id = m_frame_id;
-  scan.header.stamp    = ros::Time::now();
   // Add time offset (to account for network latency etc.)
-  scan.header.stamp += ros::Duration().fromSec(m_time_offset);
+  scan.header.stamp = this->now() + rclcpp::Duration::from_seconds(m_time_offset);
   // TODO check why returned number of beams is misaligned to size of vector
   std::vector<sick::datastructure::ScanPoint> scan_points =
     data.getMeasurementDataPtr()->getScanPointsVector();
@@ -416,22 +390,16 @@ SickSafetyscannersRos::createLaserScanMessage(const sick::datastructure::Data& d
     const sick::datastructure::ScanPoint scan_point = scan_points.at(i);
     scan.ranges[i]                                  = static_cast<float>(scan_point.getDistance()) *
                      data.getDerivedValuesPtr()->getMultiplicationFactor() * 1e-3; // mm -> m
-    // Set values close to/greater than max range to infinity according to REP 117
-    // https://www.ros.org/reps/rep-0117.html
-    if (scan.ranges[i] >= (0.999 * m_range_max))
-    {
-      scan.ranges[i] = std::numeric_limits<double>::infinity();
-    }
     scan.intensities[i] = static_cast<float>(scan_point.getReflectivity());
   }
 
   return scan;
 }
 
-sick_safetyscanners::OutputPathsMsg
+sick_safetyscanners::msg::OutputPathsMsg
 SickSafetyscannersRos::createOutputPathsMessage(const sick::datastructure::Data& data)
 {
-  sick_safetyscanners::OutputPathsMsg msg;
+  sick_safetyscanners::msg::OutputPathsMsg msg;
 
   std::shared_ptr<sick::datastructure::ApplicationData> app_data = data.getApplicationDataPtr();
   sick::datastructure::ApplicationOutputs outputs                = app_data->getOutputs();
@@ -456,10 +424,10 @@ SickSafetyscannersRos::createOutputPathsMessage(const sick::datastructure::Data&
   return msg;
 }
 
-sick_safetyscanners::RawMicroScanDataMsg
+sick_safetyscanners::msg::RawMicroScanDataMsg
 SickSafetyscannersRos::createRawDataMessage(const sick::datastructure::Data& data)
 {
-  sick_safetyscanners::RawMicroScanDataMsg msg;
+  sick_safetyscanners::msg::RawMicroScanDataMsg msg;
 
   msg.header               = createDataHeaderMessage(data);
   msg.derived_values       = createDerivedValuesMessage(data);
@@ -471,10 +439,10 @@ SickSafetyscannersRos::createRawDataMessage(const sick::datastructure::Data& dat
   return msg;
 }
 
-sick_safetyscanners::DataHeaderMsg
+sick_safetyscanners::msg::DataHeaderMsg
 SickSafetyscannersRos::createDataHeaderMessage(const sick::datastructure::Data& data)
 {
-  sick_safetyscanners::DataHeaderMsg msg;
+  sick_safetyscanners::msg::DataHeaderMsg msg;
 
   if (!data.getDataHeaderPtr()->isEmpty())
   {
@@ -499,10 +467,10 @@ SickSafetyscannersRos::createDataHeaderMessage(const sick::datastructure::Data& 
   return msg;
 }
 
-sick_safetyscanners::DerivedValuesMsg
+sick_safetyscanners::msg::DerivedValuesMsg
 SickSafetyscannersRos::createDerivedValuesMessage(const sick::datastructure::Data& data)
 {
-  sick_safetyscanners::DerivedValuesMsg msg;
+  sick_safetyscanners::msg::DerivedValuesMsg msg;
 
   if (!data.getDerivedValuesPtr()->isEmpty())
   {
@@ -518,10 +486,10 @@ SickSafetyscannersRos::createDerivedValuesMessage(const sick::datastructure::Dat
   return msg;
 }
 
-sick_safetyscanners::GeneralSystemStateMsg
+sick_safetyscanners::msg::GeneralSystemStateMsg
 SickSafetyscannersRos::createGeneralSystemStateMessage(const sick::datastructure::Data& data)
 {
-  sick_safetyscanners::GeneralSystemStateMsg msg;
+  sick_safetyscanners::msg::GeneralSystemStateMsg msg;
 
   if (!data.getGeneralSystemStatePtr()->isEmpty())
   {
@@ -569,10 +537,10 @@ SickSafetyscannersRos::createGeneralSystemStateMessage(const sick::datastructure
   return msg;
 }
 
-sick_safetyscanners::MeasurementDataMsg
+sick_safetyscanners::msg::MeasurementDataMsg
 SickSafetyscannersRos::createMeasurementDataMessage(const sick::datastructure::Data& data)
 {
-  sick_safetyscanners::MeasurementDataMsg msg;
+  sick_safetyscanners::msg::MeasurementDataMsg msg;
 
   if (!data.getMeasurementDataPtr()->isEmpty())
   {
@@ -582,10 +550,10 @@ SickSafetyscannersRos::createMeasurementDataMessage(const sick::datastructure::D
   return msg;
 }
 
-std::vector<sick_safetyscanners::ScanPointMsg>
+std::vector<sick_safetyscanners::msg::ScanPointMsg>
 SickSafetyscannersRos::createScanPointMessageVector(const sick::datastructure::Data& data)
 {
-  std::vector<sick_safetyscanners::ScanPointMsg> msg_vector;
+  std::vector<sick_safetyscanners::msg::ScanPointMsg> msg_vector;
 
   std::shared_ptr<sick::datastructure::MeasurementData> measurement_data =
     data.getMeasurementDataPtr();
@@ -595,7 +563,7 @@ SickSafetyscannersRos::createScanPointMessageVector(const sick::datastructure::D
   for (uint32_t i = 0; i < num_points; i++)
   {
     sick::datastructure::ScanPoint scan_point = scan_points.at(i);
-    sick_safetyscanners::ScanPointMsg msg;
+    sick_safetyscanners::msg::ScanPointMsg msg;
     msg.distance              = scan_point.getDistance();
     msg.reflectivity          = scan_point.getReflectivity();
     msg.angle                 = scan_point.getAngle() + m_angle_offset;
@@ -611,10 +579,10 @@ SickSafetyscannersRos::createScanPointMessageVector(const sick::datastructure::D
   return msg_vector;
 }
 
-sick_safetyscanners::IntrusionDataMsg
+sick_safetyscanners::msg::IntrusionDataMsg
 SickSafetyscannersRos::createIntrusionDataMessage(const sick::datastructure::Data& data)
 {
-  sick_safetyscanners::IntrusionDataMsg msg;
+  sick_safetyscanners::msg::IntrusionDataMsg msg;
 
   if (!data.getIntrusionDataPtr()->isEmpty())
   {
@@ -623,10 +591,10 @@ SickSafetyscannersRos::createIntrusionDataMessage(const sick::datastructure::Dat
   return msg;
 }
 
-std::vector<sick_safetyscanners::IntrusionDatumMsg>
+std::vector<sick_safetyscanners::msg::IntrusionDatumMsg>
 SickSafetyscannersRos::createIntrusionDatumMessageVector(const sick::datastructure::Data& data)
 {
-  std::vector<sick_safetyscanners::IntrusionDatumMsg> msg_vector;
+  std::vector<sick_safetyscanners::msg::IntrusionDatumMsg> msg_vector;
 
   std::shared_ptr<sick::datastructure::IntrusionData> intrusion_data = data.getIntrusionDataPtr();
   std::vector<sick::datastructure::IntrusionDatum> intrusion_datums =
@@ -634,7 +602,7 @@ SickSafetyscannersRos::createIntrusionDatumMessageVector(const sick::datastructu
 
   for (size_t i = 0; i < intrusion_datums.size(); i++)
   {
-    sick_safetyscanners::IntrusionDatumMsg msg;
+    sick_safetyscanners::msg::IntrusionDatumMsg msg;
     sick::datastructure::IntrusionDatum intrusion_datum = intrusion_datums.at(i);
     msg.size                                            = intrusion_datum.getSize();
     std::vector<bool> flags                             = intrusion_datum.getFlagsVector();
@@ -647,10 +615,10 @@ SickSafetyscannersRos::createIntrusionDatumMessageVector(const sick::datastructu
   return msg_vector;
 }
 
-sick_safetyscanners::ApplicationDataMsg
+sick_safetyscanners::msg::ApplicationDataMsg
 SickSafetyscannersRos::createApplicationDataMessage(const sick::datastructure::Data& data)
 {
-  sick_safetyscanners::ApplicationDataMsg msg;
+  sick_safetyscanners::msg::ApplicationDataMsg msg;
 
   if (!data.getApplicationDataPtr()->isEmpty())
   {
@@ -660,10 +628,10 @@ SickSafetyscannersRos::createApplicationDataMessage(const sick::datastructure::D
   return msg;
 }
 
-sick_safetyscanners::ApplicationInputsMsg
+sick_safetyscanners::msg::ApplicationInputsMsg
 SickSafetyscannersRos::createApplicationInputsMessage(const sick::datastructure::Data& data)
 {
-  sick_safetyscanners::ApplicationInputsMsg msg;
+  sick_safetyscanners::msg::ApplicationInputsMsg msg;
 
   std::shared_ptr<sick::datastructure::ApplicationData> app_data = data.getApplicationDataPtr();
   sick::datastructure::ApplicationInputs inputs                  = app_data->getInputs();
@@ -693,10 +661,10 @@ SickSafetyscannersRos::createApplicationInputsMessage(const sick::datastructure:
   return msg;
 }
 
-sick_safetyscanners::ApplicationOutputsMsg
+sick_safetyscanners::msg::ApplicationOutputsMsg
 SickSafetyscannersRos::createApplicationOutputsMessage(const sick::datastructure::Data& data)
 {
-  sick_safetyscanners::ApplicationOutputsMsg msg;
+  sick_safetyscanners::msg::ApplicationOutputsMsg msg;
 
   std::shared_ptr<sick::datastructure::ApplicationData> app_data = data.getApplicationDataPtr();
   sick::datastructure::ApplicationOutputs outputs                = app_data->getOutputs();
@@ -752,8 +720,8 @@ SickSafetyscannersRos::createApplicationOutputsMessage(const sick::datastructure
   return msg;
 }
 
-bool SickSafetyscannersRos::getFieldData(sick_safetyscanners::FieldData::Request& req,
-                                         sick_safetyscanners::FieldData::Response& res)
+void SickSafetyscannersRos::getFieldData(const std::shared_ptr<sick_safetyscanners::srv::FieldData::Request> req,
+                                         std::shared_ptr<sick_safetyscanners::srv::FieldData::Response> res)
 {
   std::vector<sick::datastructure::FieldData> fields;
   m_device->requestFieldData(m_communication_settings, fields);
@@ -761,7 +729,7 @@ bool SickSafetyscannersRos::getFieldData(sick_safetyscanners::FieldData::Request
   for (size_t i = 0; i < fields.size(); i++)
   {
     sick::datastructure::FieldData field = fields.at(i);
-    sick_safetyscanners::FieldMsg field_msg;
+    sick_safetyscanners::msg::FieldMsg field_msg;
 
     field_msg.start_angle        = degToRad(field.getStartAngle() + m_angle_offset);
     field_msg.angular_resolution = degToRad(field.getAngularBeamResolution());
@@ -773,12 +741,12 @@ bool SickSafetyscannersRos::getFieldData(sick_safetyscanners::FieldData::Request
       field_msg.ranges.push_back(static_cast<float>(ranges.at(j)) * 1e-3);
     }
 
-    res.fields.push_back(field_msg);
+    res->fields.push_back(field_msg);
   }
 
   datastructure::DeviceName device_name;
   m_device->requestDeviceName(m_communication_settings, device_name);
-  res.device_name = device_name.getDeviceName();
+  res->device_name = device_name.getDeviceName();
 
 
   std::vector<sick::datastructure::MonitoringCaseData> monitoring_cases;
@@ -787,7 +755,7 @@ bool SickSafetyscannersRos::getFieldData(sick_safetyscanners::FieldData::Request
   for (size_t i = 0; i < monitoring_cases.size(); i++)
   {
     sick::datastructure::MonitoringCaseData monitoring_case_data = monitoring_cases.at(i);
-    sick_safetyscanners::MonitoringCaseMsg monitoring_case_msg;
+    sick_safetyscanners::msg::MonitoringCaseMsg monitoring_case_msg;
 
     monitoring_case_msg.monitoring_case_number = monitoring_case_data.getMonitoringCaseNumber();
     std::vector<uint16_t> mon_fields           = monitoring_case_data.getFieldIndices();
@@ -797,10 +765,8 @@ bool SickSafetyscannersRos::getFieldData(sick_safetyscanners::FieldData::Request
       monitoring_case_msg.fields.push_back(mon_fields.at(j));
       monitoring_case_msg.fields_valid.push_back(mon_fields_valid.at(j));
     }
-    res.monitoring_cases.push_back(monitoring_case_msg);
+    res->monitoring_cases.push_back(monitoring_case_msg);
   }
-
-  return true;
 }
 
 

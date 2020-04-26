@@ -42,7 +42,7 @@ SickSafetyscanners::SickSafetyscanners(
   sick::datastructure::CommSettings* settings)
   : m_newPacketReceivedCallbackFunction(newPacketReceivedCallbackFunction)
 {
-  ROS_INFO("Starting SickSafetyscanners");
+  BOOST_LOG_TRIVIAL(info) << "Starting SickSafetyscanners";
   m_io_service_ptr       = std::make_shared<boost::asio::io_service>();
   m_async_udp_client_ptr = std::make_shared<sick::communication::AsyncUDPClient>(
     boost::bind(&SickSafetyscanners::processUDPPacket, this, _1),
@@ -52,7 +52,7 @@ SickSafetyscanners::SickSafetyscanners(
     m_async_udp_client_ptr
       ->getLocalPort()); // Store which port was used, needed for data request from the laser
   m_packet_merger_ptr = std::make_shared<sick::data_processing::UDPPacketMerger>();
-  ROS_INFO("Started SickSafetyscanners");
+  BOOST_LOG_TRIVIAL(info) <<"Started SickSafetyscanners";
 }
 
 SickSafetyscanners::~SickSafetyscanners()
@@ -73,10 +73,10 @@ bool SickSafetyscanners::run()
 
 bool SickSafetyscanners::udpClientThread()
 {
-  ROS_INFO("Enter io thread");
+  BOOST_LOG_TRIVIAL(info) << "Enter io thread";
   m_io_work_ptr = std::make_shared<boost::asio::io_service::work>(boost::ref(*m_io_service_ptr));
   m_io_service_ptr->run();
-  ROS_INFO("Exit io thread");
+  BOOST_LOG_TRIVIAL(info) << "Exit io thread";
   return true;
 }
 
@@ -326,7 +326,7 @@ void SickSafetyscanners::requestDeviceNameInColaSession(datastructure::DeviceNam
     std::make_shared<sick::cola2::DeviceNameVariableCommand>(boost::ref(*m_session_ptr),
                                                              device_name);
   m_session_ptr->executeCommand(command_ptr);
-  ROS_INFO("Device name: %s", device_name.getDeviceName().c_str());
+  BOOST_LOG_TRIVIAL(info) << "Device name:" << device_name.getDeviceName().c_str();
 }
 
 
@@ -337,7 +337,7 @@ void SickSafetyscanners::requestApplicationNameInColaSession(
     std::make_shared<sick::cola2::ApplicationNameVariableCommand>(boost::ref(*m_session_ptr),
                                                                   application_name);
   m_session_ptr->executeCommand(command_ptr);
-  ROS_INFO("Application name: %s", application_name.getApplicationName().c_str());
+  BOOST_LOG_TRIVIAL(info) << "Application name: " << application_name.getApplicationName().c_str();
 }
 
 void SickSafetyscanners::requestSerialNumberInColaSession(
@@ -347,7 +347,7 @@ void SickSafetyscanners::requestSerialNumberInColaSession(
     std::make_shared<sick::cola2::SerialNumberVariableCommand>(boost::ref(*m_session_ptr),
                                                                serial_number);
   m_session_ptr->executeCommand(command_ptr);
-  ROS_INFO("Serial Number: %s", serial_number.getSerialNumber().c_str());
+  BOOST_LOG_TRIVIAL(info) << "Serial Number: " << serial_number.getSerialNumber().c_str();
 }
 
 void SickSafetyscanners::requestFirmwareVersionInColaSession(
@@ -357,7 +357,7 @@ void SickSafetyscanners::requestFirmwareVersionInColaSession(
     std::make_shared<sick::cola2::FirmwareVersionVariableCommand>(boost::ref(*m_session_ptr),
                                                                   firmware_version);
   m_session_ptr->executeCommand(command_ptr);
-  ROS_INFO("Firmware Version: %s", firmware_version.getFirmwareVersion().c_str());
+  BOOST_LOG_TRIVIAL(info) << "Firmware Version: " << firmware_version.getFirmwareVersion().c_str();
 }
 
 void SickSafetyscanners::requestTypeCodeInColaSession(sick::datastructure::TypeCode& type_code)
@@ -365,7 +365,7 @@ void SickSafetyscanners::requestTypeCodeInColaSession(sick::datastructure::TypeC
   sick::cola2::Cola2Session::CommandPtr command_ptr =
     std::make_shared<sick::cola2::TypeCodeVariableCommand>(boost::ref(*m_session_ptr), type_code);
   m_session_ptr->executeCommand(command_ptr);
-  ROS_INFO("Type Code: %s", type_code.getTypeCode().c_str());
+  BOOST_LOG_TRIVIAL(info) << "Type Code: " << type_code.getTypeCode().c_str();
 }
 
 void SickSafetyscanners::requestOrderNumberInColaSession(
@@ -375,7 +375,7 @@ void SickSafetyscanners::requestOrderNumberInColaSession(
     std::make_shared<sick::cola2::OrderNumberVariableCommand>(boost::ref(*m_session_ptr),
                                                               order_number);
   m_session_ptr->executeCommand(command_ptr);
-  ROS_INFO("Order Number: %s", order_number.getOrderNumber().c_str());
+  BOOST_LOG_TRIVIAL(info) << "Order Number: " << order_number.getOrderNumber().c_str();
 }
 
 void SickSafetyscanners::requestProjectNameInColaSession(
@@ -385,7 +385,7 @@ void SickSafetyscanners::requestProjectNameInColaSession(
     std::make_shared<sick::cola2::ProjectNameVariableCommand>(boost::ref(*m_session_ptr),
                                                               project_name);
   m_session_ptr->executeCommand(command_ptr);
-  ROS_INFO("Project Name: %s", project_name.getProjectName().c_str());
+  BOOST_LOG_TRIVIAL(info) << "Project Name: " << project_name.getProjectName().c_str();
 }
 
 void SickSafetyscanners::requestUserNameInColaSession(sick::datastructure::UserName& user_name)
@@ -393,7 +393,7 @@ void SickSafetyscanners::requestUserNameInColaSession(sick::datastructure::UserN
   sick::cola2::Cola2Session::CommandPtr command_ptr =
     std::make_shared<sick::cola2::UserNameVariableCommand>(boost::ref(*m_session_ptr), user_name);
   m_session_ptr->executeCommand(command_ptr);
-  ROS_INFO("User Name: %s", user_name.getUserName().c_str());
+  BOOST_LOG_TRIVIAL(info) << "User Name: " << user_name.getUserName().c_str();
 }
 
 void SickSafetyscanners::requestConfigMetadataInColaSession(
