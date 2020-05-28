@@ -10,10 +10,10 @@ from launch.substitutions import LaunchConfiguration
 
 def generate_launch_description():
 
-    sensor_ip = LaunchConfiguration("sensor_ip", default="192.168.1.11")
-    host_ip = LaunchConfiguration("host_ip", default="192.168.1.9")
+    sensor_ip = LaunchConfiguration("sensor_ip", default="172.29.29.2")
+    host_ip = LaunchConfiguration("host_ip", default="172.29.29.1")
     host_udp_port = LaunchConfiguration("host_udp_port", default="0")
-    frame_id = LaunchConfiguration("frame_id", default="scan")
+    frame_id = LaunchConfiguration("frame_id", default="top_lidar_sensor_frame")
     skip = LaunchConfiguration("skip", default="0")
     angle_start = LaunchConfiguration("angle_start", default="0.0")
     angle_end = LaunchConfiguration("angle_end", default="0.0")
