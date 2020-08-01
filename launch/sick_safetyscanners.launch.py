@@ -30,8 +30,8 @@ def generate_launch_description():
         [
             Node(
                 package="sick_safetyscanners",
-                node_executable="sick_safetyscanners_node",
-                node_name="sick_safetyscanners",
+                executable="sick_safetyscanners_node",
+                name="sick_safetyscanners",
                 output="screen",
                 emulate_tty=True,
                 parameters=[
