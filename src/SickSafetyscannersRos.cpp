@@ -74,8 +74,9 @@ SickSafetyscannersRos::SickSafetyscannersRos()
     &m_expected_frequency, &m_expected_frequency, m_frequency_tolerance);
   diagnostic_updater::TimeStampStatusParam timestamp_param(m_timestamp_min_acceptable,
                                                            m_timestamp_max_acceptable);
-  m_diagnosed_laser_scan_publisher.reset(new DiagnosedLaserScanPublisher(
-    m_laser_scan_publisher, m_diagnostic_updater, frequency_param, timestamp_param));
+  // TODO DiagnosedPubliser broken in eloquent (https://github.com/ros/diagnostics/pull/135)
+  // m_diagnosed_laser_scan_publisher.reset(new DiagnosedLaserScanPublisher(
+  //   m_laser_scan_publisher, m_diagnostic_updater, frequency_param, timestamp_param));
   m_diagnostic_updater.add("State", this, &SickSafetyscannersRos::sensorDiagnostics);
 
   m_device = std::make_shared<sick::SickSafetyscanners>(
@@ -227,7 +228,10 @@ void SickSafetyscannersRos::receivedUDPPacket(const sick::datastructure::Data& d
   {
     sensor_msgs::msg::LaserScan scan = createLaserScanMessage(data);
 
-    m_diagnosed_laser_scan_publisher->publish(scan);
+    // TODO DiagnosedPubliser broken in eloquent (https://github.com/ros/diagnostics/pull/135)
+    // m_diagnosed_laser_scan_publisher->publish(scan);
+    // instead only publish scan
+    m_laser_scan_publisher->publish(scan);
   }
 
   if (!data.getMeasurementDataPtr()->isEmpty() && !data.getDerivedValuesPtr()->isEmpty())
