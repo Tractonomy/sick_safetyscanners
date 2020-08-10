@@ -212,13 +212,16 @@ rosidl_target_interfaces(${PROJECT_NAME}_node ${PROJECT_NAME} "rosidl_typesuppor
 #############
 
 # Mark executables and/or libraries for installation
-install(TARGETS
-  ${PROJECT_NAME}_core
-  DESTINATION lib/${PROJECT_NAME}
+install(
+  TARGETS ${PROJECT_NAME}_core
+  LIBRARY DESTINATION lib
+  ARCHIVE DESTINATION lib
+  RUNTIME DESTINATION bin
+  INCLUDES DESTINATION include
 )
 
-install(TARGETS
-  ${PROJECT_NAME}_node
+install(
+  TARGETS ${PROJECT_NAME}_node
   DESTINATION lib/${PROJECT_NAME}
 )
 
