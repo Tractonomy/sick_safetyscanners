@@ -34,6 +34,9 @@ def generate_launch_description():
                 name="sick_safetyscanners",
                 output="screen",
                 emulate_tty=True,
+                remappings=[
+                    ('/diagnostics', 'diagnostics')
+                ],
                 parameters=[
                     {
                         "sensor_ip": sensor_ip,
