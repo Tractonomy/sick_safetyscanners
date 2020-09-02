@@ -212,7 +212,7 @@ bool SickSafetyscannersRos::readParameters()
   m_communication_settings.setFeatures(
     general_system_state, derived_settings, measurement_data, intrusion_data, application_io_data);
 
-  declare_parameter("m_frame_id", m_frame_id);
+  declare_parameter("frame_id", m_frame_id);
   get_parameter("frame_id", m_frame_id);
 
   declare_parameter("m_use_pers_conf", m_use_pers_conf);
